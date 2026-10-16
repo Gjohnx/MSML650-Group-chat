@@ -1,0 +1,6 @@
+{
+  "wsUrl": "wss://<api-id>.execute-api.<region>.amazonaws.com/prod",
+  "region": "us-east-1",
+  "userPoolId": "us-east-1_XXXXXXXXX",
+  "appClientId": "xxxxxxxxxxxxxxxxxxxxxxxxxx"
+}

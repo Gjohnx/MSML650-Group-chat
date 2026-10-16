@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Node / client
+node_modules/
+client/dist/
+
+# CDK
+infra/cdk.out/
+infra/.cdk.staging/
+cdk.context.json
+
+# Secrets and local config
+.env
+.env.*
+*.pem
+aws-exports.js
+config.local.json
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+client/config.json
