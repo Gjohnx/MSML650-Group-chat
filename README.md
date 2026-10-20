@@ -36,7 +36,7 @@ for message handling, and DynamoDB for connection tracking and chat history.
 | 3 | Message broadcast | 2 | |
 | 4 | Persistence + history | 5 | |
 | 5 | Client + infrastructure as code | demo | Ryan |
-| 6 | Testing, load, status update, slides | 4 | |
+| 6 | Testing, load, status update, slides | 6 |Jianjiong Xiang|
 
 ## Working agreement
 
