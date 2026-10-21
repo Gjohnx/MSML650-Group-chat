@@ -34,7 +34,7 @@ for message handling, and DynamoDB for connection tracking and chat history.
 | 1 | Auth (Cognito + authorizer) | 1 | |
 | 2 | WebSocket API + connection lifecycle | 3 | |
 | 3 | Message broadcast | 2 | |
-| 4 | Persistence + history | 5 | |
+| 4 | Persistence + history | 5 | Abhiram Metuku |
 | 5 | Client + infrastructure as code | demo | Ryan |
 | 6 | Testing, load, status update, slides | 6 |Jianjiong Xiang|
 
