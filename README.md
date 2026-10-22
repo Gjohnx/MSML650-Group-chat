@@ -23,8 +23,8 @@ for message handling, and DynamoDB for connection tracking and chat history.
 | `lambdas/connect/`, `lambdas/disconnect/`, `lambdas/join_room/` | role 2 | Connection lifecycle and stale cleanup |
 | `lambdas/send_message/` | role 3 | Persist and fan out |
 | `lambdas/get_history/` | role 4 | Paginated history |
-| `infra/` | role 5 | CDK app that deploys everything |
-| `client/` | role 5 | Static web client |
+| `infra/` | role 5a | CDK app that deploys everything |
+| `client/` | role 5b | Static web client |
 | `tests/load/` | role 6 | Concurrency and latency tests |
 
 ## Roles
@@ -32,11 +32,12 @@ for message handling, and DynamoDB for connection tracking and chat history.
 | # | Area | Criterion | Who |
 |---|------|-----------|-----|
 | 1 | Auth (Cognito + authorizer) | 1 | |
-| 2 | WebSocket API + connection lifecycle | 3 | |
-| 3 | Message broadcast | 2 | |
+| 2 | WebSocket API + connection lifecycle | 3 | Aaryan |
+| 3 | Message broadcast | 2 | Aaryan |
 | 4 | Persistence + history | 5 | Abhiram Metuku |
-| 5 | Client + infrastructure as code | demo | Ryan |
-| 6 | Testing, load, status update, slides | 6 |Jianjiong Xiang|
+| 5a | Infrastructure as code + demo stack | demo | Ryan |
+| 5b | Web client | demo | |
+| 6 | Testing, load, status update, slides | 4 | Jianjiong Xiang (John) |
 
 ## Working agreement
 
