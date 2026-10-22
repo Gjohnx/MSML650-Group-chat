@@ -9,8 +9,9 @@ from constructs import Construct
 
 
 class GroupChatStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, *, owner: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+        self.owner = owner
 
         self.connections = ddb.Table(
             self, "Connections",
