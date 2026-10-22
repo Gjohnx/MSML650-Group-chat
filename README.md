@@ -31,7 +31,7 @@ for message handling, and DynamoDB for connection tracking and chat history.
 
 | # | Area | Criterion | Who |
 |---|------|-----------|-----|
-| 1 | Auth (Cognito + authorizer) | 1 | |
+| 1 | Auth (Cognito + authorizer) | 1 | Dang |
 | 2 | WebSocket API + connection lifecycle | 3 | Aaryan |
 | 3 | Message broadcast | 2 | Aaryan |
 | 4 | Persistence + history | 5 | Abhiram Metuku |
