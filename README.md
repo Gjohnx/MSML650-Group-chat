@@ -36,7 +36,7 @@ for message handling, and DynamoDB for connection tracking and chat history.
 | 3 | Message broadcast | 2 | Aaryan |
 | 4 | Persistence + history | 5 | Abhiram Metuku |
 | 5a | Infrastructure as code + demo stack | demo | Ryan |
-| 5b | Web client | demo | |
+| 5b | Web client | demo | Sai |
 | 6 | Testing, load, status update, slides | 4 | Jianjiong Xiang (John) |
 
 ## Working agreement
