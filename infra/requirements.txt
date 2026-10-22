@@ -1,2 +1,3 @@
 aws-cdk-lib>=2.150
 constructs>=10.0
+boto3>=1.34   # for tools/get_token.py
