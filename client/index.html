@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Group Chat</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Group Chat</h1>
+    <span id="status" class="pill" data-state="offline">offline</span>
+    <span class="spacer"></span>
+    <span id="whoami" hidden></span>
+    <button id="signOut" class="link" hidden>Sign out</button>
+  </header>
+
+  <main>
+    <p id="fatal" class="banner error" hidden></p>
+
+    <!-- Sign in / sign up / confirm -->
+    <section id="authView" class="card auth" hidden>
+      <nav class="tabs">
+        <button data-tab="signIn" class="active">Sign in</button>
+        <button data-tab="signUp">Create account</button>
+        <button data-tab="confirm">Confirm code</button>
+      </nav>
+
+      <form id="signInForm" data-pane="signIn">
+        <label>Username or email <input name="username" autocomplete="username" required></label>
+        <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Sign in</button>
+      </form>
+
+      <form id="signUpForm" data-pane="signUp" hidden>
+        <label>Username <input name="username" autocomplete="username" required pattern="[A-Za-z0-9_.\-]{1,64}"></label>
+        <label>Email <input name="email" type="email" autocomplete="email" required></label>
+        <label>Password <input name="password" type="password" autocomplete="new-password" required minlength="8"></label>
+        <p class="hint">At least 8 characters, with a lowercase letter and a digit.</p>
+        <button type="submit">Create account</button>
+      </form>
+
+      <form id="confirmForm" data-pane="confirm" hidden>
+        <label>Username <input name="username" autocomplete="username" required></label>
+        <label>Code from your email <input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+        <button type="submit">Confirm</button>
+        <button type="button" id="resendCode" class="link">Resend code</button>
+      </form>
+
+      <p id="authMsg" class="banner" hidden></p>
+    </section>
+
+    <!-- Rooms + chat -->
+    <section id="chatView" class="chat" hidden>
+      <aside class="rooms card">
+        <form id="roomForm">
+          <label>Room <input name="roomId" placeholder="general" required pattern="[a-z0-9\-]{1,64}" maxlength="64"></label>
+          <button type="submit">Join</button>
+        </form>
+        <ul id="roomList"></ul>
+
+        <div class="latency">
+          <h2>Broadcast latency</h2>
+          <dl>
+            <dt>last</dt><dd id="latLast">–</dd>
+            <dt>p50</dt><dd id="latP50">–</dd>
+            <dt>p95</dt><dd id="latP95">–</dd>
+            <dt>samples</dt><dd id="latN">0</dd>
+          </dl>
+          <p class="hint">Time from send to the server's echo of your own message. Target: under 200 ms.</p>
+        </div>
+      </aside>
+
+      <div class="room card">
+        <div class="roomhead">
+          <h2 id="roomTitle">Pick a room</h2>
+        </div>
+        <div id="messages" class="messages">
+          <button id="loadOlder" class="link" hidden>Load older messages</button>
+          <ol id="messageList"></ol>
+        </div>
+        <p id="chatMsg" class="banner error" hidden>
+          <span id="chatMsgText"></span>
+          <button id="retry" class="link" hidden>Retry</button>
+        </p>
+        <form id="sendForm" class="composer">
+          <input name="body" placeholder="Message" autocomplete="off" maxlength="2000" disabled>
+          <button type="submit" disabled>Send</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
