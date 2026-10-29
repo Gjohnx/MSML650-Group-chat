@@ -26,10 +26,21 @@ def get_messages(room_id, before=None, limit=50):
     result = table.query(
         KeyConditionExpression=condition, ScanIndexForward=False, Limit=limit
     )
+    items = result.get("Items", [])
 
-    messages = list(reversed(result.get("Items", [])))
+    has_more = len(items) > limit
+    items = items[:limit]
 
-    return messages
+    next_before = items[-1]["sortKey"] if has_more else None
+
+    messages = list(reversed(items))
+
+    return {
+        "type": "history",
+        "roomId": room_id,
+        "messages": messages,
+        "nextBefore": next_before,
+    }
 
 
 def handler(event, context):
