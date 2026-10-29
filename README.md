@@ -26,6 +26,8 @@ for message handling, and DynamoDB for connection tracking and chat history.
 | `infra/` | role 5a | CDK app that deploys everything |
 | `client/` | role 5b | Static web client |
 | `tests/load/` | role 6 | Concurrency and latency tests |
+| `tests/smoke/`, `tests/test_*.py` | role 6 | Criterion 1 smoke check, unit tests run in CI |
+| `.github/workflows/` | role 6 | CI on every PR, deploy of the demo stack from `main`. See `docs/CI_CD.md`. |
 
 ## Roles
 
@@ -42,6 +44,7 @@ for message handling, and DynamoDB for connection tracking and chat history.
 ## Working agreement
 
 - Branch per piece, pull request into `main`, one teammate reviews.
+- CI must pass before merging (see `docs/CI_CD.md`).
 - Change `docs/CONTRACTS.md` by pull request before changing code that depends on it.
 - Never commit `.env`, `config.json`, or keys. See `.gitignore`.
 

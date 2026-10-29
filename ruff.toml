@@ -1,0 +1,7 @@
+# Lint config for CI. Kept to real bugs (pyflakes, bugbear, pycodestyle
+# errors); line length is not enforced so nobody fails CI on formatting.
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E501"]
