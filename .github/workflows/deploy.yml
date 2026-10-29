@@ -1,0 +1,165 @@
+# CD: deploys the shared demo stack (GroupChat-demo) from main.
+#
+#   1. Runs CI (ci.yml) and stops if it fails.
+#   2. cdk deploy -c owner=demo
+#   3. Publishes the web client to S3 and invalidates CloudFront, once
+#      client/index.html exists.
+#   4. Smoke-checks criterion 1 against the live endpoint.
+#   5. Optionally (manual run, "run_load_test") runs the load test for
+#      criteria 2 and 4 and attaches the JSON report to the run.
+#
+# Needs one repository secret, AWS_DEPLOY_ROLE_ARN: an IAM role GitHub assumes
+# through OIDC, so no AWS keys are stored in GitHub. Setup: docs/CI_CD.md.
+# Until that secret exists the deploy job is skipped and CI still runs.
+name: Deploy demo stack
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch:
+    inputs:
+      run_load_test:
+        description: "Run the load test after deploying"
+        type: boolean
+        default: false
+      clients:
+        description: "Load test: concurrent clients"
+        default: "20"
+      messages:
+        description: "Load test: messages per client"
+        default: "10"
+      expect_valid_token:
+        description: "Smoke: also require a real Cognito token to connect (on once the authorizer verifies JWTs)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  OWNER: demo
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: demo
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check AWS role is configured
+        id: gate
+        env:
+          ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE" ]; then
+            echo "::notice::AWS_DEPLOY_ROLE_ARN is not set; skipping deploy. See docs/CI_CD.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            infra/requirements.txt
+            tests/load/requirements.txt
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          node-version: "22"
+
+      - name: Install
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          pip install -r infra/requirements.txt -r tests/load/requirements.txt
+          npm install -g aws-cdk
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gh-deploy-${{ github.run_id }}
+
+      - name: cdk deploy
+        if: steps.gate.outputs.ready == 'true'
+        working-directory: infra
+        run: |
+          cdk deploy "GroupChat-$OWNER" -c owner="$OWNER" \
+            --require-approval never --outputs-file ../cdk-outputs.json
+          echo "### Deployed GroupChat-$OWNER" >> "$GITHUB_STEP_SUMMARY"
+          python -c "import json; o=json.load(open('../cdk-outputs.json'))['GroupChat-$OWNER']; [print(f'- **{k}**: {v}') for k,v in o.items()]" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish web client
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          if [ ! -f client/index.html ]; then
+            echo "::notice::client/index.html not found yet; skipping client publish."
+            exit 0
+          fi
+          read -r BUCKET WS POOL APPCLIENT CLIENT_URL < <(python -c "
+          import json; o=json.load(open('cdk-outputs.json'))['GroupChat-$OWNER']
+          print(o['ClientBucketName'], o['WebSocketUrl'], o['UserPoolId'], o['AppClientId'], o['ClientUrl'])")
+          python -c "
+          import json, sys
+          json.dump({'wsUrl': sys.argv[1], 'region': '$AWS_REGION', 'userPoolId': sys.argv[2], 'appClientId': sys.argv[3]},
+                    open('client/config.json', 'w'), indent=2)" "$WS" "$POOL" "$APPCLIENT"
+          aws s3 sync client/ "s3://$BUCKET/" --delete \
+            --exclude "README.md" --exclude "config.example.json" --exclude "node_modules/*"
+          DOMAIN="${CLIENT_URL#https://}"
+          DIST=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?DomainName=='$DOMAIN'].Id | [0]" --output text)
+          aws cloudfront create-invalidation --distribution-id "$DIST" --paths "/*" > /dev/null
+          echo "- **Client published** to $CLIENT_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test criterion 1 (unauthorized connections rejected)
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          FLAG=""
+          if [ "${{ inputs.expect_valid_token }}" = "true" ]; then FLAG="--valid-token"; fi
+          python tests/smoke/check_auth.py --owner "$OWNER" --profile '' $FLAG | tee smoke.txt
+          { echo "### Smoke: criterion 1"; echo '```'; cat smoke.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Load test (criteria 2 and 4)
+        if: steps.gate.outputs.ready == 'true' && inputs.run_load_test
+        run: |
+          set +e
+          python tests/load/load_test.py --owner "$OWNER" --profile '' --create \
+            --clients "${{ inputs.clients }}" --messages "${{ inputs.messages }}" --json > load-report.json
+          STATUS=$?
+          python -c "
+          import json; r=json.load(open('load-report.json')); l=r['latencyMs']
+          print('### Load test:', 'PASS' if r['passed'] else 'FAIL')
+          print(f\"- {r['connected']}/{r['clients']} clients, {r['messagesPerClient']} messages each\")
+          print(f\"- missing {r['missing']}, duplicates {r['duplicates']}\")
+          print(f\"- latency p50 {l['p50']} ms, p95 {l['p95']} ms, max {l['max']} ms\")
+          for p in r['problems']: print(f'- {p}')" >> "$GITHUB_STEP_SUMMARY"
+          exit $STATUS
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.gate.outputs.ready == 'true' && inputs.run_load_test
+        with:
+          name: load-report
+          path: load-report.json
+          if-no-files-found: ignore

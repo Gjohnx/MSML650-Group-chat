@@ -1,0 +1,100 @@
+# One-time setup for .github/workflows/deploy.yml. Owner: role 6.
+#
+# Creates an IAM role that GitHub Actions can assume through OIDC, only from
+# this repository's "demo" environment, so no AWS access keys live in GitHub.
+# Team IAM users cannot create IAM resources (docs/AWS_ACCESS.md), so an
+# account admin deploys this once:
+#
+#   aws cloudformation deploy --region us-east-1 \
+#     --stack-name GroupChat-github-deploy-role \
+#     --template-file infra/ci/github-deploy-role.yaml \
+#     --capabilities CAPABILITY_NAMED_IAM
+#
+# Add --parameter-overrides CreateOidcProvider=false if the account already has
+# a token.actions.githubusercontent.com identity provider. The stack output
+# RoleArn goes into the repository secret AWS_DEPLOY_ROLE_ARN. See docs/CI_CD.md.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: GitHub Actions OIDC deploy role for the group chat demo stack
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: Gjohnx/MSML650-Group-chat
+    Description: owner/repo allowed to assume the role
+  GitHubEnvironment:
+    Type: String
+    Default: demo
+    Description: GitHub environment the deploy job runs in
+  CreateOidcProvider:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+
+Conditions:
+  MakeProvider: !Equals [!Ref CreateOidcProvider, "true"]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: group-chat-github-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:environment:${GitHubEnvironment}
+      Policies:
+        - PolicyName: deploy-demo-stack
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # cdk deploy works by assuming the roles `cdk bootstrap` created.
+              - Sid: UseCdkBootstrapRoles
+                Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/cdk-*
+              - Sid: ReadCdkBootstrapVersion
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:us-east-1:${AWS::AccountId}:parameter/cdk-bootstrap/*
+              # Smoke and load tests read the stack outputs and make test users.
+              - Sid: ReadDemoStackOutputs
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub arn:aws:cloudformation:us-east-1:${AWS::AccountId}:stack/GroupChat-demo/*
+              - Sid: ManageTestUsers
+                Effect: Allow
+                Action:
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                Resource: !Sub arn:aws:cognito-idp:us-east-1:${AWS::AccountId}:userpool/*
+              # Publish the web client.
+              - Sid: PublishClient
+                Effect: Allow
+                Action: [s3:ListBucket, s3:GetObject, s3:PutObject, s3:DeleteObject]
+                Resource:
+                  - arn:aws:s3:::groupchat-demo-clientbucket*
+                  - arn:aws:s3:::groupchat-demo-clientbucket*/*
+              - Sid: InvalidateClientCache
+                Effect: Allow
+                Action: [cloudfront:ListDistributions, cloudfront:CreateInvalidation]
+                Resource: "*"
+
+Outputs:
+  RoleArn:
+    Description: Put this in the GitHub repository secret AWS_DEPLOY_ROLE_ARN
+    Value: !GetAtt DeployRole.Arn
