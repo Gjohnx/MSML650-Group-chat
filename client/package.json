@@ -1,0 +1,11 @@
+{
+  "name": "group-chat-client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "mock": "node mock/server.mjs"
+  },
+  "devDependencies": {
+    "ws": "8.18.0"
+  }
+}
