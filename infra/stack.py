@@ -19,6 +19,7 @@ from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 from bundling import LocalPipBundler
+from dashboard import build_dashboard
 
 LAMBDAS_DIR = Path(__file__).resolve().parent.parent / "lambdas"
 RUNTIME = lambda_.Runtime.PYTHON_3_12
@@ -136,12 +137,23 @@ class GroupChatStack(Stack):
             ),
         )
 
+        # ---- Monitoring ----------------------------------------------------
+        self.dashboard = build_dashboard(
+            self, owner=owner, api=self.api, stage_name=self.stage.stage_name,
+            fns=self.fns, connections=self.connections, messages=self.messages,
+        )
+
         # ---- Outputs the client and tests read ----------------------------
         CfnOutput(self, "WebSocketUrl", value=self.stage.url)
         CfnOutput(self, "UserPoolId", value=self.user_pool.user_pool_id)
         CfnOutput(self, "AppClientId", value=self.app_client.user_pool_client_id)
         CfnOutput(self, "ClientBucketName", value=self.client_bucket.bucket_name)
         CfnOutput(self, "ClientUrl", value=f"https://{self.distribution.distribution_domain_name}")
+        CfnOutput(
+            self, "DashboardUrl",
+            value=f"https://{self.region}.console.aws.amazon.com/cloudwatch/home?region={self.region}"
+                  f"#dashboards/dashboard/{self.dashboard.dashboard_name}",
+        )
 
     def _lambda(self, name: str, env: dict) -> lambda_.Function:
         source = LAMBDAS_DIR / name
