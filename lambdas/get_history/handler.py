@@ -28,10 +28,8 @@ def get_messages(room_id, before=None, limit=50):
     )
     items = result.get("Items", [])
 
-    has_more = len(items) > limit
-    items = items[:limit]
-
-    next_before = items[-1]["sortKey"] if has_more else None
+    has_more = "LastEvaluatedKey" in result
+    next_before = items[-1]["sortKey"] if has_more and items else None
 
     messages = list(reversed(items))
 
