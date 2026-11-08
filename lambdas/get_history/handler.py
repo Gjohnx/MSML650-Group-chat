@@ -78,7 +78,7 @@ def handler(event, context):
     if before is not None and (not isinstance(before, str) or not before):
         return error("BAD_REQUEST", "Invalid before")
 
-    if type(limit) is not int or not 1 <= limit <= 100:
+    if type(limit) is not int or not 1 <= limit <= 50:
         return error("BAD_REQUEST", "Limit must be between 1 and 100")
 
     try:
@@ -86,14 +86,6 @@ def handler(event, context):
         connection = connections.get_item(Key={"connectionId": connection_id}).get(
             "Item"
         )
-
-        if not connection:
-            return error("UNAUTHORIZED", "Connection not found")
-
-        if connection.get("roomId") != room_id:
-            return error("NOT_IN_ROOM", "Join the room first")
-
-        history = get_messages(room_id, before, limit)
 
     except (BotoCoreError, ClientError):
         return error("INTERNAL", "Could not retrieve chat history")
