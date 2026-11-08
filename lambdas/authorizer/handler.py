@@ -14,7 +14,7 @@ APP_CLIENT_ID = os.environ.get("APP_CLIENT_ID", "")
 REGION = USER_POOL_ID.split("_")[0]
 
 ISSUER = (
-    f"https://cpgnito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}"
+    f"https://cognito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}"
 )
 
 jwks_client = PyJWKClient(
