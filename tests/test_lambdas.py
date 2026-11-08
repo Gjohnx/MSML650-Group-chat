@@ -62,7 +62,7 @@ def test_authorizer_allows_valid_token(monkeypatch):
     class FakeSigningKey:
         key = public_key
 
-    monkeypatch/setattr(
+    monkeypatch.setattr(
         authorizer.jwks_client,
         "get_signing_key_from_jwt",
         lambda token: FakeSigningKey(),
