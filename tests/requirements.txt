@@ -1,3 +1,4 @@
 -r load/requirements.txt
 pytest>=8
 ruff>=0.6
+moto[dynamodb]>=5
