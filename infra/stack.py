@@ -18,6 +18,7 @@ from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
+from alarms import build_alarms
 from bundling import LocalPipBundler
 from dashboard import build_dashboard
 
@@ -48,6 +49,13 @@ class GroupChatStack(Stack):
             partition_key=ddb.Attribute(name="roomId", type=ddb.AttributeType.STRING),
             sort_key=ddb.Attribute(name="sortKey", type=ddb.AttributeType.STRING),
             billing_mode=ddb.BillingMode.PAY_PER_REQUEST,
+            # Chat history is the only data worth restoring: PITR lets us roll
+            # the table back to any second in the last 35 days after a bad
+            # write or delete. Connections is rebuilt by reconnecting, so it
+            # does not need it. Costs cents at our data size.
+            point_in_time_recovery_specification=ddb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+            ),
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -115,7 +123,17 @@ class GroupChatStack(Stack):
                 route,
                 integration=integrations.WebSocketLambdaIntegration(f"{fn_name}Integration", self.fns[fn_name]),
             )
-        self.stage = apigw.WebSocketStage(self, "ProdStage", web_socket_api=self.api, stage_name="prod", auto_deploy=True)
+        # Stage-wide throttle: caps what a runaway client or script can cost us
+        # and protects DynamoDB and Lambda from a flood. The default load test
+        # (20 clients x 20 msg/s) peaks near 400 req/s, so this leaves 2.5x
+        # headroom. Raise it before a load test bigger than ~50 clients.
+        self.stage = apigw.WebSocketStage(
+            self, "ProdStage",
+            web_socket_api=self.api,
+            stage_name="prod",
+            auto_deploy=True,
+            throttle=apigw.ThrottleSettings(rate_limit=1000, burst_limit=2000),
+        )
 
         for name in ("join_room", "send_message", "get_history"):
             self.fns[name].add_environment("WS_ENDPOINT", self.stage.callback_url)
@@ -138,9 +156,13 @@ class GroupChatStack(Stack):
         )
 
         # ---- Monitoring ----------------------------------------------------
+        self.alarm_topic, self.alarms = build_alarms(
+            self, owner=owner, api=self.api, stage_name=self.stage.stage_name, fns=self.fns,
+        )
         self.dashboard = build_dashboard(
             self, owner=owner, api=self.api, stage_name=self.stage.stage_name,
             fns=self.fns, connections=self.connections, messages=self.messages,
+            alarms=self.alarms,
         )
 
         # ---- Outputs the client and tests read ----------------------------
@@ -149,6 +171,7 @@ class GroupChatStack(Stack):
         CfnOutput(self, "AppClientId", value=self.app_client.user_pool_client_id)
         CfnOutput(self, "ClientBucketName", value=self.client_bucket.bucket_name)
         CfnOutput(self, "ClientUrl", value=f"https://{self.distribution.distribution_domain_name}")
+        CfnOutput(self, "AlarmTopicArn", value=self.alarm_topic.topic_arn)
         CfnOutput(
             self, "DashboardUrl",
             value=f"https://{self.region}.console.aws.amazon.com/cloudwatch/home?region={self.region}"
