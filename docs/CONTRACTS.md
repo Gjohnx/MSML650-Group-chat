@@ -63,7 +63,7 @@ authorizer context so a client cannot impersonate another user.
 | `connectionId` | S    | Partition key. From API Gateway. |
 | `userId`       | S    | Cognito `sub` |
 | `username`     | S    | Cognito `cognito:username` |
-| `roomId`       | S    | Empty until `joinRoom` |
+| `roomId`       | S    | Absent until `joinRoom` (DynamoDB rejects an empty string as a GSI key) |
 | `connectedAt`  | N    | Epoch ms |
 | `expiresAt`    | N    | Epoch **seconds**. TTL attribute, set to connectedAt + 2 hours. Backstop for stale sockets. |
 
