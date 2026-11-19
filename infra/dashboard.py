@@ -11,8 +11,10 @@ What each row can and cannot prove:
   duration). True end-to-end latency includes the network to each client and
   comes from the client readout and the load test report. Use this row to show
   the server's share of the 200 ms budget.
-- Criterion 3: GoneException log lines from sendMessage (each one is a stale
-  connection being deleted) and $disconnect invocations.
+- Criterion 3: the `gone` count sendMessage logs on every broadcast (each one
+  is a stale connection it found and deleted) and $disconnect invocations.
+  sendMessage does not log the word GoneException, so the query parses the
+  structured "broadcast" log line instead.
 - Criterion 4: MessageCount, errors, and throttles under load. Zero errors and
   zero throttles during the load test is the evidence.
 - Criterion 5: getHistory and joinRoom invocations, errors, and duration.
@@ -51,6 +53,7 @@ def build_dashboard(
     fns: dict[str, lambda_.Function],
     connections: ddb.Table,
     messages: ddb.Table,
+    alarms: list[cw.Alarm] | None = None,
 ) -> cw.Dashboard:
     all_fns = list(fns)
     send_log_group = f"/aws/lambda/{fns['send_message'].function_name}"
@@ -73,6 +76,13 @@ def build_dashboard(
             "comes from the client readout and the load test report."
         ),
     ))
+
+    # ---- Alarm status (red means look below) ---------------------------------
+    if alarms:
+        dash.add_widgets(cw.AlarmStatusWidget(
+            title="Alarms", alarms=alarms, width=FULL, height=3,
+            sort_by=cw.AlarmStatusWidgetSortBy.STATE_UPDATED_TIMESTAMP,
+        ))
 
     # ---- Criterion 1: unauthorized connections rejected -------------------
     header("## 1. Unauthorized connections rejected")
@@ -121,12 +131,13 @@ def build_dashboard(
     header("## 3. Stale connections cleaned up")
     dash.add_widgets(
         cw.LogQueryWidget(
-            title="Stale sockets found during broadcast (GoneException)", width=12,
+            title="Stale sockets deleted during broadcast", width=12,
             log_group_names=[send_log_group],
             view=cw.LogQueryVisualizationType.BAR,
             query_lines=[
-                "filter @message like /GoneException/",
-                "stats count() as stale_connections by bin(5m)",
+                'filter @message like /"event": "broadcast"/',
+                "parse @message '\"gone\": *,' as gone",
+                "stats sum(gone) as stale_connections by bin(5m)",
             ],
         ),
         cw.GraphWidget(

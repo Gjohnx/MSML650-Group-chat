@@ -5,8 +5,21 @@ AWS CDK app in Python that deploys the whole stack in one command:
 - Cognito user pool + app client
 - API Gateway WebSocket API with the routes in `docs/CONTRACTS.md`
 - One Lambda per folder under `lambdas/`
-- DynamoDB `Connections` (with `roomId-index` GSI and TTL on `expiresAt`) and `Messages`
+- DynamoDB `Connections` (with `roomId-index` GSI and TTL on `expiresAt`) and `Messages` (with point-in-time recovery)
 - S3 bucket + CloudFront for the client
+- CloudWatch dashboard (`dashboard.py`) and alarms (`alarms.py`) on an SNS topic
+- A stage-wide throttle of 1000 req/s, burst 2000. Raise it in `stack.py` before a load test bigger than ~50 clients.
+
+## Alarm emails
+
+Alarms work without this, but to get them by email add your address at deploy
+time and click the confirmation link AWS sends:
+
+```bash
+cdk deploy --profile msml650 -c owner=<yourname> -c alarm_email=you@example.com
+```
+
+The drill that trips them on purpose is in `docs/FAILURE_DRILL.md`.
 
 ## First time
 
