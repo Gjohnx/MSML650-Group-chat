@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 CONNECTIONS_TABLE = os.environ.get("CONNECTIONS_TABLE", "")
@@ -28,6 +29,27 @@ MAX_WORKERS = 32
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Created once per container and reused while it stays warm.
+_clients = {}
+
+
+def ws_client():
+    if "ws" not in _clients:
+        # One pooled connection per presence thread; botocore defaults to 10.
+        _clients["ws"] = boto3.client(
+            "apigatewaymanagementapi",
+            endpoint_url=WS_ENDPOINT,
+            config=Config(max_pool_connections=MAX_WORKERS),
+        )
+    return _clients["ws"]
+
+
+def tables():
+    if "tables" not in _clients:
+        dynamodb = boto3.resource("dynamodb")
+        _clients["tables"] = (dynamodb.Table(CONNECTIONS_TABLE), dynamodb.Table(MESSAGES_TABLE))
+    return _clients["tables"]
 
 
 def is_gone(err):
@@ -107,7 +129,7 @@ def handler(event, context):
     if not connection_id:
         return {"statusCode": 400, "body": "Missing connection ID"}
 
-    ws = boto3.client("apigatewaymanagementapi", endpoint_url=WS_ENDPOINT)
+    ws = ws_client()
 
     def reply(frame):
         try:
@@ -135,8 +157,7 @@ def handler(event, context):
     if not isinstance(room_id, str) or not ROOM_ID.fullmatch(room_id):
         return error("BAD_REQUEST", "roomId must be 1 to 64 characters of a-z, 0-9 and -")
 
-    dynamodb = boto3.resource("dynamodb")
-    connections = dynamodb.Table(CONNECTIONS_TABLE)
+    connections, messages = tables()
 
     try:
         # Conditional so a socket whose row was already cleaned up cannot
@@ -158,7 +179,7 @@ def handler(event, context):
         return error("INTERNAL", "Could not join the room")
 
     try:
-        history = newest_messages(dynamodb.Table(MESSAGES_TABLE), room_id)
+        history = newest_messages(messages, room_id)
     except (BotoCoreError, ClientError):
         logger.exception("could not load history for %s", room_id)
         return error("INTERNAL", "Could not load chat history")

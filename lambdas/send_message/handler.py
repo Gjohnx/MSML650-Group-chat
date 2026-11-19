@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 CONNECTIONS_TABLE = os.environ.get("CONNECTIONS_TABLE", "")
@@ -41,7 +42,12 @@ _clients = {}
 
 def ws_client():
     if "ws" not in _clients:
-        _clients["ws"] = boto3.client("apigatewaymanagementapi", endpoint_url=WS_ENDPOINT)
+        # One pooled connection per fan-out thread; botocore defaults to 10.
+        _clients["ws"] = boto3.client(
+            "apigatewaymanagementapi",
+            endpoint_url=WS_ENDPOINT,
+            config=Config(max_pool_connections=MAX_WORKERS),
+        )
     return _clients["ws"]
 
 
@@ -159,7 +165,10 @@ def handler(event, context):
     connections, messages = tables()
 
     try:
-        connection = connections.get_item(Key={"connectionId": connection_id}).get("Item")
+        # Strongly consistent, so a send right after joinRoom sees the new roomId.
+        connection = connections.get_item(
+            Key={"connectionId": connection_id}, ConsistentRead=True
+        ).get("Item")
     except (BotoCoreError, ClientError):
         logger.exception("could not read connection %s", connection_id)
         return error("INTERNAL", "Could not send the message")

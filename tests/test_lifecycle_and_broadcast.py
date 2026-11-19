@@ -25,6 +25,7 @@ class Recorder:
     def __init__(self):
         self.posts = []
         self.gone = set()
+        self.client_kwargs = []
 
     def post_to_connection(self, ConnectionId, Data):  # noqa: N803 - boto3 argument names
         if ConnectionId in self.gone:
@@ -68,6 +69,7 @@ def env(monkeypatch):
 
         def fake_client(service, *args, **kwargs):
             if service == "apigatewaymanagementapi":
+                recorder.client_kwargs.append(kwargs)
                 return recorder
             return real_client(service, *args, **kwargs)
 
@@ -329,3 +331,13 @@ def test_invalid_json_is_bad_request(env):
     setup_room(env, "alice")
     env["h"]["send_message"]({"requestContext": {"connectionId": "c0"}, "body": "{nope"}, None)
     assert last_error(env, "c0")["code"] == "BAD_REQUEST"
+
+
+# ---- Client setup ----------------------------------------------------------------
+
+def test_management_clients_pool_one_connection_per_fanout_thread(env):
+    setup_room(env, "alice", "bob")
+    send(env, "c0")
+    assert env["ws"].client_kwargs
+    for kwargs in env["ws"].client_kwargs:
+        assert kwargs["config"].max_pool_connections == 32
