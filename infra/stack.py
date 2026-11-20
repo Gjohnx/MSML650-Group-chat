@@ -195,6 +195,10 @@ class GroupChatStack(Stack):
                 ),
             ),
             timeout=Duration.seconds(10),
-            memory_size=256,
+            # Lambda CPU scales with memory; 1769 MB is one full vCPU. At 256 MB
+            # the 2026-11-20 load test (20 clients, 200 sends in 850 ms, every
+            # one a cold start) spent ~2.5 s per sendMessage on CPU-bound boto3
+            # setup and TLS handshakes, p95 3 s. Cost stays in the free tier.
+            memory_size=1769,
             environment=env,
         )
