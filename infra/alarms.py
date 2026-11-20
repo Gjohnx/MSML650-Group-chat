@@ -76,6 +76,27 @@ def build_alarms(
         comparison_operator=cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
     )
 
+    # Any of this stack's Lambdas throttled. Added after the 2026-11-19 load
+    # test: the account's concurrency quota was 10, the authorizer and $connect
+    # were throttled (12 connects got HTTP 500), and send-throttles stayed
+    # green because sendMessage was never reached.
+    add(
+        "AnyThrottlesAlarm", "any-throttles",
+        "A Lambda in this stack was throttled: requests are being refused (check the account concurrency quota)",
+        metric=cw.MathExpression(
+            expression=" + ".join(f"FILL(t{i}, 0)" for i in range(len(fns))),
+            using_metrics={
+                f"t{i}": fn.metric_throttles(period=PERIOD, statistic="Sum")
+                for i, fn in enumerate(fns.values())
+            },
+            label="throttles, all Lambdas",
+            period=PERIOD,
+        ),
+        threshold=1,
+        evaluation_periods=1,
+        comparison_operator=cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    )
+
     # Errors API Gateway itself saw: integration failures and execution errors.
     def api_metric(metric_name: str) -> cw.Metric:
         return cw.Metric(
